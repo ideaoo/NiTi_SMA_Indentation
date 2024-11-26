@@ -1,0 +1,158 @@
+variable F2 string S505_1_indentation2
+variable F2dump string ${F2}_dump
+variable F2restart string ${F2}_restart
+variable F2data string ${F2}_data
+
+shell mkdir ${F2}
+shell cd ${F2}
+shell mkdir ${F2dump}
+shell mkdir ${F2restart}
+shell mkdir ${F2data}
+shell cp ../indent-2NN-500K ${F2data}  
+shell cd ../
+
+read_restart restart_temp_220000.restart 
+
+neighbor      2.0 bin
+neigh_modify  delay 5
+
+#----- indent detail -----
+variable      k equal 60.0
+variable      radius equal 30
+#----- change box -----
+change_box all boundary p p s
+
+#----- create geometry -----
+variable a              equal 3.008
+variable b		          equal 3.008	
+variable c              equal 3.008
+
+	#scale factor which can be tuned to check the size effect
+variable scale		equal 1.0
+
+	#assign the number of lattice along each axis
+variable a1_scale 	equal 67*${scale}
+variable a2_scale 	equal 67*${scale}
+variable a3_scale 	equal 67*${scale}
+
+	#assign the tilt and angle (beta) of an unit lattice
+variable beta 		equal 90.0/180.0*3.14159265359
+variable csinbeta	equal ${c}*sin(${beta})
+variable ccosbeta   equal ${c}*cos(${beta})
+variable _ccosbeta	equal -${c}*cos(${beta})
+
+	#make sure the lattice boundaries don't cut through center of atoms
+	#assign the boundaries of the simulation box 
+variable Box1Lower1	equal 0
+variable Box1Lower2	equal 0
+variable Box1Lower3	equal 0
+variable Box1Upper1 equal ${a}*${a1_scale}+${Box1Lower1}
+variable Box1Upper2 equal ${b}*${a2_scale}+${Box1Lower2}
+variable Box1Upper3 equal ${c}*${a3_scale}+${Box1Lower3}
+
+
+variable Boxlegthx  equal 208.0-${Box1Lower1}
+variable Boxlegthy  equal 208.0-${Box1Lower2}
+variable Boxlegthz  equal 208.0-${Box1Lower3}
+
+variable centerX  	equal ${Boxlegthx}/2.0
+variable centery  	equal ${Boxlegthy}/2.0
+variable fixheight  equal 3.008*5
+
+#------ create region ------- 
+
+region         box_1 block -2.0 210.0 -2.0 210.0 -2.0 220.0  units box
+region         1 block INF INF INF INF INF ${fixheight}  units box
+
+group         lower region 1
+group         mobile subtract all lower
+#------ mass of atoms ------
+mass           1 58.6934	#nickel mass (amu)
+mass           2 47.867		#titanium mass (amu)
+#----- force field -----
+pair_style     meam/c
+pair_coeff     * * library.meam Ni Ti NiTi.meam Ni Ti 
+#----- pre-setting ----- Equilibrium ------
+#reset_timestep 0    #modified
+#timestep 0.002
+#variable TDamp equal 0.002*100
+#variable PDamp equal 0.002*1000
+
+variable T equal 99.967698 
+#variable tol equal 5
+compute new mobile temp
+#velocity mobile create ${T} 65651 temp new
+#fix 1 all nve
+#fix 2 mobile langevin ${T} ${T} 5 984651
+#fix p1 mobile press/berendsen  x 0.0 0.0 100 y 0.0 0.0 100
+#fix   zero lower setforce 0 0 0
+
+#restart 20000 ${F2}/${F2restart}/Temp_*.restart 
+#thermo          100
+#thermo_style custom step c_new pe ke etotal lz press pxx pyy pzz 
+#dump           8 all custom 200 ${F2}/${F2dump}/2NN-eq_*.dump id type xu yu zu
+#dump_modify    8 sort id  
+#run			20000
+#label		loop
+#variable		Tdiff equal abs(c_new-${T})
+#if "${Tdiff} > ${tol}" then &
+			#"run 1000" &
+		    #"jump SELF loop"
+#undump 8
+#unfix 1
+#unfix 2
+#unfix p1
+	#end up this stage
+
+minimize 1.0e-10 1.0e-10 1000000 2000000
+#----- Indent -----
+reset_timestep 0 #modified
+variable centerZ equal ${Box1Upper3}+5.0+${radius} 
+variable Move equal 30-(step-100000)*dt*0.05
+variable n equal ${centerZ}-v_Move
+variable z equal $n+(step-100000)*dt*0.05
+variable Hight equal ${centerZ}-${radius}-v_Move+1
+
+variable z1 equal ${centerZ}-step*dt*0.15 
+
+fix 3 mobile nve
+fix 4 mobile langevin ${T} ${T} 5 32768
+fix p2 mobile press/berendsen  x 0.0 0.0 1000 y 0.0 0.0 1000
+fix 1 lower setforce 0 0 0
+fix 9 mobile indent ${k} sphere ${centerX} ${centery} v_z1 ${radius} units box ####
+
+#----- output-file -----
+variable p1 equal step
+variable p2 equal c_new
+variable p3 equal v_Move
+variable p4 equal f_9[3]
+variable p5 equal etotal
+variable p6 equal pe
+variable p7 equal ke
+fix indent all print 100 "${p1} ${p2} ${p3} ${p4} ${p5} ${p6} ${p7}" file 2NN-325-indent2.txt screen no
+
+#----- Output -----
+restart 10000 ${F2}/${F2restart}/indent_100_*.restart 
+dump           8 all custom 100 ${F2}/${F2dump}/2NN-100-indent_*.dump id type xu yu zu
+dump_modify    8 sort id  
+
+thermo 200
+thermo_style custom step c_new pe ke etotal lz v_Move f_9[1] f_9[2] f_9[3] v_z1
+
+run 100000
+
+
+
+
+
+
+#print "$n is v_n "
+#variable z equal $n+(step-300000)*dt*0.05
+#variable Move equal 30-(step-300000)*dt*0.05
+
+#thermo 200
+#thermo_style custom step c_new etotal pe ke lz v_Move  f_9[1] f_9[2] f_9[3] v_z 
+
+#run 300000
+#
+#print -----end-----

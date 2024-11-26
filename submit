@@ -1,0 +1,275 @@
+#!/bin/sh 
+#
+if [ "$#" -ne 1 ]
+then
+    echo "You have to assign a input file !!"
+    echo "<< Job not submitted !! >>"
+    exit
+fi
+
+JOB=$1
+shift
+options=$
+USER=`whoami`
+HERE=`pwd`
+JOBID=$$
+
+if [ -f ${JOB}.lmp ]
+then
+    /bin/rm ${JOB}.lmp
+fi
+
+QUE=1cpu
+NCORS=1
+NPROC=1
+echo "Select the number of CPUs(cores) run your job: "
+echo "1cpu, 4cpu, 8cpu, 16cpu, 24cpu, 32cpu, 40cpu, 48cpu, 56cpu [$QUE] "
+echo "56*2cpu, 56*4cpu, 56*10cpu, 56*16cpu, 56*32cpu, 56*45cpu, 56*72cpu, 56*144cpu, 56*256cpu, 56*512cpu, 56*768cpu, 56*720cpu, 56*800cpu, 56*880cpu, 56*900cpu? "
+read QUE
+
+if [ -z "$QUE" ]
+  then
+  QUEUE=ct560
+  NODES=1
+  NCORS=1
+  NPROC=1
+fi
+
+if [ "$QUE" = 1 ]
+then
+  QUEUE=ct560
+  NODES=1
+  NCORS=1
+  NPROC=1
+fi
+if [ "$QUE" = 4 ]
+then
+  QUEUE=ct560
+  NODES=1
+  NCORS=1
+  NPROC=4
+fi
+if [ "$QUE" = 8 ]
+then
+  QUEUE=ct560
+  NODES=1
+  NCORS=1
+  NPROC=8
+fi
+if [ "$QUE" = 16 ]
+then
+  QUEUE=ct560
+  NODES=1
+  NCORS=1 
+  NPROC=16
+fi
+if [ "$QUE" = 24 ]
+then
+  QUEUE=ct560
+  NODES=1
+  NCORS=1 
+  NPROC=24
+fi
+if [ "$QUE" = 28 ]
+then
+  QUEUE=ct560
+  NODES=1
+  NCORS=1 
+  NPROC=28
+fi
+if [ "$QUE" = 32 ]
+then
+  QUEUE=ct560
+  NODES=1
+  NCORS=1
+  NPROC=32
+fi
+if [ "$QUE" = 40 ]
+then
+  QUEUE=ct560
+  NODES=1
+  NCORS=1
+  NPROC=40
+fi
+if [ "$QUE" = 48 ]
+then
+  QUEUE=ct560
+  NODES=1
+  NCORS=1
+  NPROC=48
+fi
+if [ "$QUE" = 56 ]
+then
+  QUEUE=ct560
+  NODES=1
+  NCORS=1 
+  NPROC=56
+fi
+if [ "$QUE" = 56*2 ]
+then
+  QUEUE=ct560
+  NODES=2
+  NCORS=1
+  NPROC=112
+fi
+if [ "$QUE" = 56*4 ]
+then
+  QUEUE=ct560
+  NODES=4
+  NCORS=1
+  NPROC=224
+fi
+if [ "$QUE" = 56*10 ]
+then
+  QUEUE=ct560
+  NODES=10
+  NCORS=1
+  NPROC=560
+fi
+if [ "$QUE" = 56*16 ]
+then
+  QUEUE=ct560
+  NODES=16
+  NCORS=1
+  NPROC=896
+fi
+if [ "$QUE" = 56*32 ]
+then
+  QUEUE=ct560
+  NODES=32
+  NCORS=1
+  NPROC=1792
+fi
+if [ "$QUE" = 56*45 ]
+then
+  QUEUE=ct560
+  NODES=45
+  NCORS=1
+  NPROC=2520
+fi
+if [ "$QUE" = 56*72 ]
+then
+  QUEUE=ct560
+  NODES=72
+  NCORS=1
+  NPROC=4032
+fi
+if [ "$QUE" = 56*144 ]
+then
+  QUEUE=ct560
+  NODES=144
+  NCORS=1
+  NPROC=8064
+fi
+if [ "$QUE" = 56*256 ]
+then
+  QUEUE=ct560
+  NODES=256
+  NCORS=1
+  NPROC=14336
+fi
+if [ "$QUE" = 56*512 ]
+then
+  QUEUE=ct560
+  NODES=512
+  NCORS=1
+  NPROC=28672
+fi
+if [ "$QUE" = 56*768 ]
+then
+  QUEUE=ct560
+  NODES=768
+  NCORS=1
+  NPROC=43008
+fi
+if [ "$QUE" = 56*720 ]
+then
+  QUEUE=ct560
+  NODES=720
+  NCORS=1
+  NPROC=40320
+fi
+if [ "$QUE" = 56*800 ]
+then
+  QUEUE=ct560
+  NODES=800
+  NCORS=1
+  NPROC=44800
+fi
+if [ "$QUE" = 56*880 ]
+then
+  QUEUE=ct560
+  NODES=880
+  NCORS=1
+  NPROC=49280
+fi
+if [ "$QUE" = 56*900 ]
+then
+  QUEUE=ct560
+  NODES=900
+  NCORS=1
+  NPROC=50400
+fi
+PARAM=""
+mp="y"
+echo "Do you want to use multi partition mode?  y or n"
+read mp
+if [ "$mp" = "y" ]
+then
+ echo "type in the partition setting with -p "
+ echo "For example:  -p  16x2 3 5"
+ echo "for 18 partitions, first 16 partitions each use 2 cores, the 17th partition uses 3 cores and "
+ echo "the last partition uses 5 cores, total core number is  40, and must be equal to $NCORS"
+ read PARAM
+fi
+echo "This script was modified first by Jui-Cheng Kao. 2021/01/14 "
+
+cat << END_OF_CAT > $JOB.lmp
+#!/bin/bash
+#SBATCH -A GOV108018                # Account name/project number
+#SBATCH -J ${JOB}                   # Job name
+#SBATCH -p $QUEUE                   # Partiotion name
+#SBATCH --nodes=$NODES              # Maximum number of nodes to be allocated
+#SBATCH --cpus-per-task=$NCORS      # Number of cores per MPI task
+#SBATCH --ntasks=$NPROC             # Number of MPI tasks (i.e. processes)
+#SBATCH -e ${JOB}.err               # Path to the standard error ouput file
+
+cd $HERE
+
+module purge
+#module load intel/2020 hdf5/1.12.0_intelmpi-19.1.3.304 netcdf/4.7.4-hdf5-1.12.0_intelmpi-19.1.3.304
+module load compiler/intel/2021 IntelMPI/2021 hdf5/1.12 netcdf/4.7.4 adios2/2.7.1
+
+export I_MPI_FABRICS=shm:ofi
+export UCX_TLS=rc,ud,sm,self
+export I_MPI_PMI_LIBRARY=/usr/lib64/libpmi2.so
+export I_MPI_DEBUG=10
+export I_MPI_HYDRA_BOOTSTRAP=slurm
+### set cpu binding
+export I_MPI_PIN=1
+
+echo "Your job script is:"
+cat $SUBMIT_FILE
+echo "End of your job script."
+
+echo "Your LAMMPS job starts at `date`"
+
+
+#EXE=/opt/ohpc/pkg/lammps/patch_10Feb2021-211-g9efc831/lmp_intel_cpu_intelmpi
+
+#mpiexec.hydra /opt/ohpc/pkg/lammps/patch_10Feb2021-211-g9efc831/lmp_intel_cpu_intelmpi -sf opt    $PARAM  -in $HERE/in.$JOB -log $JOB.out
+#mpiexec.hydra ${EXE} -sf hybrid intel omp -nocite $PARAM  -in $HERE/in.$JOB -log $JOB.out
+#mpiexec.hydra ${EXE} -sf hybrid opt omp -nocite $PARAM  -in $HERE/in.$JOB -log $JOB.out
+mpiexec.hydra /opt/ohpc/pkg/lammps/patch_10Mar2021-137-g73b9f22/lmp_intel_cpu_intelmpi  -sf opt -nocite $PARAM  -in $HERE/in.$JOB -log $JOB.out
+echo "Your LAMMPS job completed at  `date` "
+
+
+END_OF_CAT
+
+#
+chmod +x $JOB.lmp
+#
+sbatch  $JOB.lmp
+
+exit
+

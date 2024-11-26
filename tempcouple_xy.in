@@ -1,0 +1,88 @@
+#3D NiTi SMA simulation B19' -> B2 -> B19' | Finnis - Sinclair FS potential
+units         metal
+dimension     3
+boundary      p p p
+atom_style    atomic
+
+read_restart	eq_50000.restart
+
+#------ mass of atoms ------
+mass		1 47.867	#titanium mass (amu)
+mass        2 58.6934   #nickel mass (amu)
+#------ force field ------
+pair_style     meam/c
+pair_coeff     * * library.meam Ni Ti NiTi.meam Ni Ti 
+#------ I/O control and variables ------
+variable        TimeStep		equal 0.002
+variable        Time			equal ${TimeStep}*step
+variable		Pressure		equal 0.0
+variable		TDamp			equal ${TimeStep}*100
+variable        PDamp           equal ${TimeStep}*1000
+
+#------ stage 2 ------ run npt thermostat from 500K to 500K in 0 bar (1atm)
+	#assign a random velocity to atoms at 300K
+variable T equal 500
+compute pepa all pe/atom
+compute kepa all ke/atom
+#------ running ------
+reset_timestep 0 
+timestep ${TimeStep}
+#------ stage 3 ------ Store final cell length for strain calculations
+variable tolatoms equal 601526
+variable atomvol equal vol/${tolatoms}
+variable tmp equal "lz"
+variable L0  equal ${tmp}
+variable poten equal "etotal"
+variable p00    equal "temp"
+print    "Initial Length,L0: ${L0}"
+#------ stage 4 ------   DEFORMATION
+fix n1 all npt temp ${T} 100 ${TDamp} x 0.0 0.0 ${PDamp} y 0.0 0.0 ${PDamp} z 0.0 0.0 ${PDamp} couple xy 
+fix p1 all print 500 "${p00} ${atomvol} ${poten} ${tmp}" file temp_1_${T}K.txt screen no
+restart        10000 restart_temp_*.restart 
+dump           d1 all custom 250 temp_${T}K_*.dump id type xu yu zu c_pepa c_kepa
+dump_modify    d1 sort id  
+thermo         200
+thermo_style   custom step temp v_atomvol press etotal  
+
+run             200000
+
+unfix n1
+unfix p1
+#------ stage 5 ------    equilibrium
+fix n2 all npt temp 100 100 ${TDamp} x 0.0 0.0 ${PDamp} y 0.0 0.0 ${PDamp} z 0.0 0.0 ${PDamp} couple xy
+fix p2 all print 500 "${p00} ${atomvol} ${poten} ${tmp}" file temp_2_${T}K.txt screen no
+run             25000
+
+unfix n2
+unfix p2
+#undump d1
+#------ stage 6 ------   DEFORMATION
+fix n3 all npt temp 100 ${T} ${TDamp} x 0.0 0.0 ${PDamp} y 0.0 0.0 ${PDamp} z 0.0 0.0 ${PDamp} couple xy
+fix p3 all print 500 "${p00} ${atomvol} ${poten} ${tmp}" file temp_3_${T}K.txt screen no
+run             200000
+
+unfix n3
+unfix p3
+#undump d1
+#------ stage 7 ------   equilibrium
+#variable T1 equal 600
+fix n4 all npt temp 500 ${T} ${TDamp} x 0.0 0.0 ${PDamp} y 0.0 0.0 ${PDamp} z 0.0 0.0 ${PDamp} couple xy
+fix p4 all print 500 "${p00} ${atomvol} ${poten} ${tmp}" file temp_4_${T}K.txt screen no
+run             50000
+
+unfix n4
+unfix p4
+undump d1
+#------ stage 5 ------   MINIMIZE
+#variable name string modelmin_NiTi
+#shell mkdir ${name}
+#reset_timestep 0 
+#timestep ${TimeStep}
+#dump          	0 all custom 100 ${name}/modelmin_*.dump id type xu yu zu 
+#dump_modify   	0 sort id #scale no
+#thermo			100
+#thermo_style   custom step temp v_atomvol press etotal 
+#minimize 1.0e-10 1.0e-10 100000 2000000
+#undump 0
+#------ stage 7 ------ SIMULATION DONE
+print "All done"
