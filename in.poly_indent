@@ -1,0 +1,172 @@
+variable F2 string Poly_NiTi
+variable F2dump string ${F2}_dump
+variable F2restart string ${F2}_restart
+
+shell mkdir ${F2}
+shell cd ${F2}
+shell mkdir ${F2dump}
+shell mkdir ${F2restart}
+shell cd ../ 
+
+units         metal
+dimension     3 
+boundary      p p p
+atom_style    atomic
+neighbor      2.0 bin
+neigh_modify  delay 5 
+
+
+
+
+#----- create geometry -----
+variable a              equal 3.008
+variable b		        equal 3.008	
+variable c              equal 3.008
+
+#scale factor which can be tuned to check the size effect 
+variable scale		equal 1.0
+
+#assign the number of lattice along each axis
+variable a1_scale 	equal 133*${scale}
+variable a2_scale 	equal 133*${scale}
+variable a3_scale 	equal 133*${scale}
+
+
+#make sure the lattice boundaries don't cut through center of atoms
+#assign the boundaries of the simulation box 
+variable Box1Lower1	equal 0
+variable Box1Lower2	equal 0
+variable Box1Lower3	equal 0
+variable Box1Upper1 equal ${a}*${a1_scale}+${Box1Lower1} 
+variable Box1Upper2 equal ${b}*${a2_scale}+${Box1Lower2}
+variable Box1Upper3 equal ${c}*${a3_scale}+${Box1Lower3}
+variable fixheight  equal 3.008*5
+
+#------ create region ------- 
+
+read_data      poly_NiTi.data
+
+change_box all z final -20 520 boundary p p f
+
+
+region         box_1 block ${Box1Lower1} ${Box1Upper1} ${Box1Lower2} ${Box1Upper2} -2 401 units box
+region    top  cylinder z 200.0 200.0 30 410 500 units box
+region    1 block INF INF INF INF INF ${fixheight}  units box
+region    2 block INF INF INF INF 480 520 units box
+
+lattice diamond 3.57
+create_atoms   3 region top
+
+
+#------ mass of atoms ------
+mass           1 58.6934	#nickel mass (amu)
+mass           2 47.867		#titanium mass (amu)
+mass           3 12.0096
+#----- force field -----
+pair_style     hybrid meam tersoff lj/cut 3.615
+pair_coeff     * * meam library.meam Ni Ti NiTi.meam Ni Ti NULL 
+pair_coeff     * * tersoff SiC.tersoff NULL NULL C 
+pair_coeff     1*2 3 lj/cut 0.01034 2 3.615
+#----- pre-setting ----- Equilibrium ------
+
+#------------------------------------------
+group         indentor region top
+group         lower region 1
+group         upper region 2   
+group         mobileD subtract indentor upper
+group         mobileA region box_1
+group         mobile  subtract mobileA lower
+group         mobileB union mobileD mobileA 
+group         mobileE union mobileD mobile
+#-----------------------------------------
+variable  TimeStep	equal 0.002
+variable  TDamp	    equal ${TimeStep}*100
+variable  PDamp     equal ${TimeStep}*1000
+variable  T         equal 325
+
+reset_timestep 0    #modified
+timestep ${TimeStep}
+
+compute new0 mobileB temp
+compute new mobileE temp
+
+dump           9 all custom 50 min_*.dump id type xu yu zu
+dump_modify    9 sort id  
+
+minimize 1.0e-8 1.0e-8 1000000 2000000
+
+undump 9
+#----- Rising indentor temp -----
+reset_timestep 0 
+timestep ${TimeStep}
+
+fix walllo all wall/reflect zlo EDGE zhi EDGE units box
+
+velocity upper zero linear
+velocity upper zero angular
+fix freeze2 upper setforce 0 0 0
+
+velocity mobileB  create 400.0 49284 rot yes dist gaussian
+
+fix n1  all nve
+fix t1 mobileB langevin 300 440 1 32768 
+fix p1  mobileA  press/berendsen  x 0.0 0.0 1000 y 0.0 0.0 1000
+
+restart        70000  to-440K_*.restart  
+dump           d1 all custom 10000 to-440K_*.dump id type xu yu zu
+dump_modify    d1 sort id  
+
+thermo 500
+thermo_style custom step c_new0 pe ke
+
+run   70000
+
+unfix t1
+unfix p1
+undump d1
+
+fix t1 mobileB langevin 440 440 1 32768 
+fix p1  mobileA  press/berendsen  x 0.0 0.0 1000 y 0.0 0.0 1000
+
+restart        25000  equ_*.restart 
+dump           d1 all custom 5000 equ_*.dump id type xu yu zu
+dump_modify    d1 sort id 
+thermo 500
+thermo_style custom step c_new0 pe ke
+
+run   25000
+
+unfix t1
+unfix p1
+undump d1
+
+#----- Indent -----
+reset_timestep 0 #modified
+timestep ${TimeStep} 
+
+variable Move equal step*dt*0.5
+variable Move1 equal 410-v_Move
+
+velocity lower zero linear
+velocity lower zero angular
+velocity lower set 0.0 0.0 0.0
+velocity upper zero linear
+velocity upper zero angular
+fix freeze lower setforce 0 0 0
+fix freeze2 upper setforce 0 0 0
+
+fix t2  mobileE langevin 440 440 1 32768  
+fix p2  mobile  press/berendsen  x 0.0 0.0 1000 y 0.0 0.0 1000
+
+velocity upper set 0.0 0.0 -0.5 sum yes units box
+
+#----- Output -----
+restart 10000  ${F2}/${F2restart}/cylinder-indent_440_*.restart 
+dump           8 all custom 200 ${F2}/${F2dump}/cylinder-440-indent_*.dump id type xu yu zu
+dump_modify    8 sort id  
+
+thermo 200
+thermo_style custom step c_new pe ke etotal  v_Move v_Move1
+
+run 70000
+print -----end-----
